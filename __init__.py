@@ -189,21 +189,24 @@ class KeycapGenerator:
                 [base_outer[i], base_inner[i], base_inner[next_i], base_outer[next_i]]
             )
 
-        # Create vertex group for top bevel
-        obj.vertex_groups.new(name="Bevel_Top")
+        # Mark top rim
         top_rim_verts = [v.index for e in top_rim_edges for v in e.verts]
-        obj.vertex_groups["Bevel_Top"].add(top_rim_verts, 1.0, "REPLACE")
-
-        # Create vertex group for vertical bevels
-        obj.vertex_groups.new(name="Bevel_Vertical")
+        # Mark verticals
         vert_verts = [v.index for e in vertical_edges for v in e.verts]
-        obj.vertex_groups["Bevel_Vertical"].add(vert_verts, 1.0, "REPLACE")
-
-        KeycapGenerator.add_bevel_modifiers(obj)
 
         # Write bmesh to mesh
         bm.to_mesh(mesh)
         bm.free()
+
+        # Create vertex group for top bevel
+        obj.vertex_groups.new(name="Bevel_Top")
+        obj.vertex_groups["Bevel_Top"].add(top_rim_verts, 1.0, "REPLACE")
+
+        # Create vertex group for vertical bevels
+        obj.vertex_groups.new(name="Bevel_Vertical")
+        obj.vertex_groups["Bevel_Vertical"].add(vert_verts, 1.0, "REPLACE")
+
+        KeycapGenerator.add_bevel_modifiers(obj)
 
         # Set object as active
         bpy.context.view_layer.objects.active = obj
@@ -287,7 +290,7 @@ class KEYCAP_OT_generate(bpy.types.Operator):
         props = context.scene.keycap_props
 
         KeycapGenerator.create_keycap(
-            width=props.width,
+            width=float(props.width),
             profile_row=int(props.profile_row),
             bevel_top_rim=props.bevel_top_rim,
             bevel_vertical=props.bevel_vertical,
@@ -320,13 +323,22 @@ def update_bevels(self, context):
 # Property group for keycap parameters
 class KeycapProperties(bpy.types.PropertyGroup):
 
-    width: bpy.props.FloatProperty(
+    width: bpy.props.EnumProperty(
         name="Width",
         description="Keycap width in units",
-        default=1.0,
-        min=1.0,
-        max=6.25,
-        step=25,
+        items=[
+            ("1", "1U", "Standard single unit keycap"),
+            ("1.25", "1.25U", "1.25 unit keycap (Tab, Caps Lock)"),
+            ("1.5", "1.5U", "1.5 unit keycap (Tab on some layouts)"),
+            ("1.75", "1.75U", "1.75 unit keycap (Caps Lock on HHKB)"),
+            ("2", "2U", "2 unit keycap (Backspace, Enter)"),
+            ("2.25", "2.25U", "2.25 unit keycap (Left Shift, Enter)"),
+            ("2.75", "2.75U", "2.75 unit keycap (Right Shift)"),
+            ("6", "6U", "6 unit spacebar"),
+            ("6.25", "6.25U", "6.25 unit spacebar (most common)"),
+            ("7", "7U", "7 unit spacebar"),
+        ],
+        default="1",
     )
 
     profile_row: bpy.props.EnumProperty(
@@ -387,14 +399,19 @@ class KEYCAP_PT_main(bpy.types.Panel):
         props = context.scene.keycap_props
 
         # Title
-        layout.label(text="Phase 1 - Core Functionality", icon="MESH_CUBE")
+        #        layout.label(text="Phase 1 - Core Functionality", icon="MESH_CUBE")
 
         # Parameters
         box = layout.box()
         box.label(text="Parameters:", icon="PREFERENCES")
         box.prop(props, "width")
-        box.prop(props, "profile_row")
-        box.prop(props, "stem_type")
+        split = box.split(factor=0.4)
+        split.label(text="Profile Row: ")
+        split.prop(props, "profile_row", text="")
+
+        split = box.split(factor=0.3)
+        split.label(text="Stem Type: ")
+        split.prop(props, "stem_type", text="")
 
         # Bevel settings
         bevel_box = layout.box()
