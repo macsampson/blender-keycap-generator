@@ -53,6 +53,7 @@ class KeycapGenerator:
     @staticmethod
     def create_keycap(
         width=1.0,
+        profile_type="CHERRY",
         profile_row=3,
         bevel_top_rim=0.3,
         bevel_vertical=0.5,
@@ -85,17 +86,22 @@ class KeycapGenerator:
         base_height = 18.0
         wall_thickness = 0.91  # Wall thickness in mm
 
-        # Top dimensions (sculpted)
-        top_width = base_width - 4.0
-        top_height = base_height - 4.0
+        # Profile-specific dimensions
+        if profile_type == "CHERRY":
+            top_width = base_width - 4.0
+            top_height = base_height - 4.0
+            row_heights = {1: 11.5, 2: 9.5, 3: 8.5, 4: 9.5}
 
-        # Height varies by row for Cherry profile
-        row_heights = {
-            1: 11.5,  # R1 (top row)
-            2: 9.5,  # R2
-            3: 8.5,  # R3 (home row)
-            4: 9.5,  # R4
-        }
+        elif profile_type == "OEM":
+            top_width = base_width - 3.0
+            top_height = base_height - 3.0
+            row_heights = {1: 12.5, 2: 11.0, 3: 9.5, 4: 10.5}
+
+        elif profile_type == "SA":
+            top_width = base_width - 2.5
+            top_height = base_height - 2.5
+            row_heights = {1: 14.89, 2: 13.49, 3: 12.925, 4: 13.49}
+
         keycap_height = row_heights.get(profile_row, 8.5)
 
         # Outer shell vertices
@@ -291,6 +297,7 @@ class KEYCAP_OT_generate(bpy.types.Operator):
 
         KeycapGenerator.create_keycap(
             width=float(props.width),
+            profile_type=props.profile_type,
             profile_row=int(props.profile_row),
             bevel_top_rim=props.bevel_top_rim,
             bevel_vertical=props.bevel_vertical,
@@ -316,27 +323,34 @@ def update_bevels(self, context):
                 mod.width = props.bevel_vertical
 
 
-#            elif mod.name == "Bevel_Dish_Mod":
-#                mod.width = props.bevel_dish
-
-
 # Property group for keycap parameters
 class KeycapProperties(bpy.types.PropertyGroup):
+
+    profile_type: bpy.props.EnumProperty(
+        name="Profile Type",
+        description="Keycap profile family",
+        items=[
+            ("CHERRY", "Cherry", "Cherry profile (low, sculpted)"),
+            ("OEM", "OEM", "OEM profile (medium height, sculpted)"),
+            ("SA", "SA", "SA profile (tall, spherical top)"),
+        ],
+        default="CHERRY",
+    )
 
     width: bpy.props.EnumProperty(
         name="Width",
         description="Keycap width in units",
         items=[
-            ("1", "1U", "Standard single unit keycap"),
-            ("1.25", "1.25U", "1.25 unit keycap (Tab, Caps Lock)"),
-            ("1.5", "1.5U", "1.5 unit keycap (Tab on some layouts)"),
-            ("1.75", "1.75U", "1.75 unit keycap (Caps Lock on HHKB)"),
-            ("2", "2U", "2 unit keycap (Backspace, Enter)"),
-            ("2.25", "2.25U", "2.25 unit keycap (Left Shift, Enter)"),
-            ("2.75", "2.75U", "2.75 unit keycap (Right Shift)"),
-            ("6", "6U", "6 unit spacebar"),
-            ("6.25", "6.25U", "6.25 unit spacebar (most common)"),
-            ("7", "7U", "7 unit spacebar"),
+            ("1", "1U - Alphas", "Standard alphanumeric keys"),
+            ("1.25", "1.25U - Modifiers", "Ctrl, Alt, Win keys"),
+            ("1.5", "1.5U - Tab", "Tab key on some layouts"),
+            ("1.75", "1.75U - Caps Lock", "Caps Lock on 65%/HHKB layouts"),
+            ("2", "2U - Backspace", "Backspace, numpad 0"),
+            ("2.25", "2.25U - Enter/Shift", "Enter, Left Shift on some layouts"),
+            ("2.75", "2.75U - Right Shift", "Right Shift on standard layouts"),
+            ("6", "6U - Spacebar", "Spacebar on compact layouts"),
+            ("6.25", "6.25U - Spacebar", "Standard TKL/full-size spacebar"),
+            ("7", "7U - Spacebar", "Spacebar on some custom layouts"),
         ],
         default="1",
     )
@@ -405,6 +419,11 @@ class KEYCAP_PT_main(bpy.types.Panel):
         box = layout.box()
         box.label(text="Parameters:", icon="PREFERENCES")
         box.prop(props, "width")
+
+        split = box.split(factor=0.5)
+        split.label(text="Profile Type: ")
+        split.prop(props, "profile_type", text="")
+
         split = box.split(factor=0.4)
         split.label(text="Profile Row: ")
         split.prop(props, "profile_row", text="")
