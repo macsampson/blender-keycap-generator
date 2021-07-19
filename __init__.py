@@ -220,7 +220,7 @@ class KeycapGenerator:
 
         # Add stem using boolean modifier (after mesh is created)
         if stem_type == "CHERRY_MX":
-            KeycapGenerator._add_cherry_stem(obj)
+            KeycapGenerator._add_cherry_stem(obj,keycap_height)
 
         # Add smooth shading with auto-smooth
         bpy.context.view_layer.objects.active = obj
@@ -230,11 +230,11 @@ class KeycapGenerator:
         return obj
 
     @staticmethod
-    def _add_cherry_stem(keycap_obj):
+    def _add_cherry_stem(keycap_obj,keycap_height):
         """Add Cherry MX stem cylinder with cross cutout to the bottom of keycap using boolean modifier"""
         # Cherry MX stem dimensions (in mm)
         stem_outer_radius = 5.6 / 2  # Outer cylinder diameter ~5.5mm
-        stem_height = 7.7  # Height of stem extending down
+        stem_height = keycap_height - 0.5 # Height of stem extending down
         cross_length = 4.15  # Cross arm length
         cross_width = 1.29  # Cross arm width
 
