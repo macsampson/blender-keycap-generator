@@ -88,8 +88,8 @@ class KeycapGenerator:
 
         # Profile-specific dimensions
         if profile_type == "CHERRY":
-            top_width = base_width - 4.0
-            top_height = base_height - 4.0
+            top_width = base_width - 5.5
+            top_height = base_height - 6.8
             row_heights = {1: 11.5, 2: 9.5, 3: 8.5, 4: 9.5}
 
         elif profile_type == "OEM":
@@ -102,7 +102,7 @@ class KeycapGenerator:
             top_height = base_height - 2.5
             row_heights = {1: 14.89, 2: 13.49, 3: 12.925, 4: 13.49}
 
-        keycap_height = row_heights.get(profile_row, 8.5)
+        keycap_height = row_heights.get(profile_row, row_heights[3])
 
         # Outer shell vertices
         # Create base vertices (bottom outer)
@@ -115,8 +115,8 @@ class KeycapGenerator:
 
         # Create top vertices (outer)
         top_outer = [
-            bm.verts.new((-top_width / 2, -top_height / 2, keycap_height)),
-            bm.verts.new((top_width / 2, -top_height / 2, keycap_height)),
+            bm.verts.new((-top_width / 2, -base_height / 2, keycap_height)),
+            bm.verts.new((top_width / 2, -base_height / 2, keycap_height)),
             bm.verts.new((top_width / 2, top_height / 2, keycap_height)),
             bm.verts.new((-top_width / 2, top_height / 2, keycap_height)),
         ]
@@ -220,7 +220,7 @@ class KeycapGenerator:
 
         # Add stem using boolean modifier (after mesh is created)
         if stem_type == "CHERRY_MX":
-            KeycapGenerator._add_cherry_stem(obj,keycap_height)
+            KeycapGenerator._add_cherry_stem(obj, keycap_height)
 
         # Add smooth shading with auto-smooth
         bpy.context.view_layer.objects.active = obj
@@ -230,11 +230,11 @@ class KeycapGenerator:
         return obj
 
     @staticmethod
-    def _add_cherry_stem(keycap_obj,keycap_height):
+    def _add_cherry_stem(keycap_obj, keycap_height):
         """Add Cherry MX stem cylinder with cross cutout to the bottom of keycap using boolean modifier"""
         # Cherry MX stem dimensions (in mm)
         stem_outer_radius = 5.6 / 2  # Outer cylinder diameter ~5.5mm
-        stem_height = keycap_height - 0.5 # Height of stem extending down
+        stem_height = keycap_height - 0.5  # Height of stem extending down
         cross_length = 4.15  # Cross arm length
         cross_width = 1.29  # Cross arm width
 
@@ -282,6 +282,31 @@ class KeycapGenerator:
         # Delete cross objects
         bpy.data.objects.remove(v_cross, do_unlink=True)
         bpy.data.objects.remove(h_cross, do_unlink=True)
+
+        # Add boolean union modifier to keycap
+        union_mod = keycap_obj.modifiers.new(name="Boolean_Stem_Union", type="BOOLEAN")
+        union_mod.operation = "UNION"
+        union_mod.object = stem_cylinder
+        union_mod.solver = "FAST"
+
+        # Apply the union modifier to merge stem into keycap
+        bpy.context.view_layer.objects.active = keycap_obj
+        bpy.ops.object.modifier_apply(modifier="Boolean_Stem_Union")
+
+        # Delete the stem object now that it's merged
+        bpy.data.objects.remove(stem_cylinder, do_unlink=True)
+
+        keycap_obj.select_set(True)
+        bpy.context.view_layer.objects.active = keycap_obj
+
+        # Add an edge split modifier
+        edge_split_mod = keycap_obj.modifiers.new(
+            name="Edge_Split_Mod", type="EDGE_SPLIT"
+        )
+        edge_split_mod.split_angle = radians(30.0)
+
+        # Apply edge split
+        bpy.ops.object.modifier_apply(modifier="Edge_Split_Mod")
 
 
 # Operator to generate keycap
@@ -392,7 +417,7 @@ class KeycapProperties(bpy.types.PropertyGroup):
         description="Switch stem type",
         items=[
             ("CHERRY_MX", "Cherry MX", "Cherry MX compatible stem"),
-            ("TOPRE", "Topre", "Topre compatible stem (WIP)"),
+            #            ("TOPRE", "Topre", "Topre compatible stem (WIP)"),
         ],
         default="CHERRY_MX",
     )
