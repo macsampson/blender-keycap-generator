@@ -89,21 +89,24 @@ class KeycapGenerator:
         # Profile-specific dimensions
         if profile_type == "CHERRY":
             top_width = base_width - 5.5
-            top_height = base_height - 6.8
+#            top_height = 11.2
+            front_taper = 3.4 # mm pulled in on top face compared to base
             row_heights = {1: 11.5, 2: 9.5, 3: 8.5, 4: 9.5}
 
         elif profile_type == "OEM":
             top_width = base_width - 3.0
-            top_height = base_height - 3.0
+#            top_height = base_height - 3.0
+            front_taper = 3.0
             row_heights = {1: 12.5, 2: 11.0, 3: 9.5, 4: 10.5}
 
         elif profile_type == "SA":
             top_width = base_width - 2.5
-            top_height = base_height - 2.5
+#            top_height = base_height - 2.5
+            front_taper = 2.5
             row_heights = {1: 14.89, 2: 13.49, 3: 12.925, 4: 13.49}
 
         keycap_height = row_heights.get(profile_row, row_heights[3])
-
+        
         # Outer shell vertices
         # Create base vertices (bottom outer)
         base_outer = [
@@ -112,13 +115,16 @@ class KeycapGenerator:
             bm.verts.new((base_width / 2, base_height / 2, 0)),
             bm.verts.new((-base_width / 2, base_height / 2, 0)),
         ]
+        
+        back_y = base_height / 2
+        front_y = (base_height / 2) - front_taper
 
         # Create top vertices (outer)
         top_outer = [
-            bm.verts.new((-top_width / 2, -base_height / 2, keycap_height)),
-            bm.verts.new((top_width / 2, -base_height / 2, keycap_height)),
-            bm.verts.new((top_width / 2, top_height / 2, keycap_height)),
-            bm.verts.new((-top_width / 2, top_height / 2, keycap_height)),
+            bm.verts.new((-top_width / 2, -back_y, keycap_height)),
+            bm.verts.new((top_width / 2, -back_y, keycap_height)),
+            bm.verts.new((top_width / 2, front_y, keycap_height)),
+            bm.verts.new((-top_width / 2, front_y, keycap_height)),
         ]
 
         # Inner shell vertices (offset by wall thickness)
@@ -126,8 +132,11 @@ class KeycapGenerator:
         base_inner_width = base_width - (wall_thickness * 2)
         base_inner_height = base_height - (wall_thickness * 2)
         top_inner_width = top_width - (wall_thickness * 2)
-        top_inner_height = top_height - (wall_thickness * 2)
+#        top_inner_height = top_height - (wall_thickness * 2)
+        front_inner_taper = front_taper
         inner_top_z = keycap_height - wall_thickness
+        
+        
 
         # Create base inner vertices (just above bottom)
         base_inner = [
@@ -136,13 +145,20 @@ class KeycapGenerator:
             bm.verts.new((base_inner_width / 2, base_inner_height / 2, 0)),
             bm.verts.new((-base_inner_width / 2, base_inner_height / 2, 0)),
         ]
+        
+        back_inner_y = base_inner_height / 2
+        front_inner_y = (base_inner_height / 2) - front_inner_taper
 
         # Create top inner vertices
         top_inner = [
-            bm.verts.new((-top_inner_width / 2, -top_inner_height / 2, inner_top_z)),
-            bm.verts.new((top_inner_width / 2, -top_inner_height / 2, inner_top_z)),
-            bm.verts.new((top_inner_width / 2, top_inner_height / 2, inner_top_z)),
-            bm.verts.new((-top_inner_width / 2, top_inner_height / 2, inner_top_z)),
+            bm.verts.new((-top_inner_width / 2, -back_inner_y, inner_top_z)),
+            bm.verts.new((top_inner_width / 2, -back_inner_y, inner_top_z)),
+            bm.verts.new(
+                (top_inner_width / 2, front_inner_y, inner_top_z)
+            ),
+            bm.verts.new(
+                (-top_inner_width / 2, front_inner_y, inner_top_z)
+            ),
         ]
 
         # Create faces - Outer shell
