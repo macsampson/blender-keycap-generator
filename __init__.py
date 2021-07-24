@@ -39,7 +39,7 @@ class KeycapGenerator:
         vert_mod = obj.modifiers.new("Bevel_Vert_Mod", "BEVEL")
         vert_mod.limit_method = "VGROUP"
         vert_mod.vertex_group = "Bevel_Vertical"
-        vert_mod.segments = 3
+        vert_mod.segments = 8
         vert_mod.use_clamp_overlap = True
         vert_mod.width = bpy.context.scene.keycap_props.bevel_vertical
 
@@ -56,7 +56,7 @@ class KeycapGenerator:
         profile_type="CHERRY",
         profile_row=3,
         bevel_top_rim=0.3,
-        bevel_vertical=0.5,
+        bevel_vertical=1.5,
         stem_type="CHERRY_MX",
     ):
         """
@@ -80,6 +80,7 @@ class KeycapGenerator:
         # Create edge tracking sets
         top_rim_edges = []
         vertical_edges = []
+        inner_vertical_edges = []
 
         # Cherry profile measurements (in mm, converted to Blender units)
         base_width = width * 18.0  # 1U = 18mm
@@ -89,24 +90,24 @@ class KeycapGenerator:
         # Profile-specific dimensions
         if profile_type == "CHERRY":
             top_width = base_width - 5.5
-#            top_height = 11.2
-            front_taper = 3.4 # mm pulled in on top face compared to base
+            #            top_height = 11.2
+            front_taper = 3.4  # mm pulled in on top face compared to base
             row_heights = {1: 11.5, 2: 9.5, 3: 8.5, 4: 9.5}
 
         elif profile_type == "OEM":
             top_width = base_width - 3.0
-#            top_height = base_height - 3.0
+            #            top_height = base_height - 3.0
             front_taper = 3.0
             row_heights = {1: 12.5, 2: 11.0, 3: 9.5, 4: 10.5}
 
         elif profile_type == "SA":
             top_width = base_width - 2.5
-#            top_height = base_height - 2.5
+            #            top_height = base_height - 2.5
             front_taper = 2.5
             row_heights = {1: 14.89, 2: 13.49, 3: 12.925, 4: 13.49}
 
         keycap_height = row_heights.get(profile_row, row_heights[3])
-        
+
         # Outer shell vertices
         # Create base vertices (bottom outer)
         base_outer = [
@@ -115,7 +116,7 @@ class KeycapGenerator:
             bm.verts.new((base_width / 2, base_height / 2, 0)),
             bm.verts.new((-base_width / 2, base_height / 2, 0)),
         ]
-        
+
         back_y = base_height / 2
         front_y = (base_height / 2) - front_taper
 
@@ -132,11 +133,9 @@ class KeycapGenerator:
         base_inner_width = base_width - (wall_thickness * 2)
         base_inner_height = base_height - (wall_thickness * 2)
         top_inner_width = top_width - (wall_thickness * 2)
-#        top_inner_height = top_height - (wall_thickness * 2)
+        #        top_inner_height = top_height - (wall_thickness * 2)
         front_inner_taper = front_taper
         inner_top_z = keycap_height - wall_thickness
-        
-        
 
         # Create base inner vertices (just above bottom)
         base_inner = [
@@ -145,7 +144,7 @@ class KeycapGenerator:
             bm.verts.new((base_inner_width / 2, base_inner_height / 2, 0)),
             bm.verts.new((-base_inner_width / 2, base_inner_height / 2, 0)),
         ]
-        
+
         back_inner_y = base_inner_height / 2
         front_inner_y = (base_inner_height / 2) - front_inner_taper
 
@@ -153,12 +152,8 @@ class KeycapGenerator:
         top_inner = [
             bm.verts.new((-top_inner_width / 2, -back_inner_y, inner_top_z)),
             bm.verts.new((top_inner_width / 2, -back_inner_y, inner_top_z)),
-            bm.verts.new(
-                (top_inner_width / 2, front_inner_y, inner_top_z)
-            ),
-            bm.verts.new(
-                (-top_inner_width / 2, front_inner_y, inner_top_z)
-            ),
+            bm.verts.new((top_inner_width / 2, front_inner_y, inner_top_z)),
+            bm.verts.new((-top_inner_width / 2, front_inner_y, inner_top_z)),
         ]
 
         # Create faces - Outer shell
@@ -179,10 +174,11 @@ class KeycapGenerator:
             # Track vertical edges (corners)
             for edge in face.edges:
                 v1, v2 = edge.verts
-                # Vertical edge if both verts have same x,y but different z
-                if abs(v1.co.x - v2.co.x) < 0.001 and abs(v1.co.y - v2.co.y) < 0.001:
+                # Check if the edge connects top to bottom
+                if abs(v1.co.z - v2.co.z) > 0.001:
                     if edge not in vertical_edges:
                         vertical_edges.append(edge)
+                        edge.select = True
 
         # Create faces - Inner shell
         # Top face (inner) - reversed to face inward
@@ -198,10 +194,11 @@ class KeycapGenerator:
             # Track inner vertical edges (corners)
             for edge in face.edges:
                 v1, v2 = edge.verts
-                # Vertical edge if both verts have same x,y but different z
-                if abs(v1.co.x - v2.co.x) < 0.001 and abs(v1.co.y - v2.co.y) < 0.001:
-                    if edge not in vertical_edges:
-                        vertical_edges.append(edge)
+                # Check if edge connects bottom to top (different z values)
+                if abs(v1.co.z - v2.co.z) > 0.001:
+                    if edge not in inner_vertical_edges:
+                        inner_vertical_edges.append(edge)
+                        edge.select = True
 
         # Connect bottom edges (rim where outer meets inner)
         for i in range(4):
@@ -211,37 +208,50 @@ class KeycapGenerator:
                 [base_outer[i], base_inner[i], base_inner[next_i], base_outer[next_i]]
             )
 
-        # Mark top rim
-        top_rim_verts = [v.index for e in top_rim_edges for v in e.verts]
-        # Mark verticals
-        vert_verts = [v.index for e in vertical_edges for v in e.verts]
+        # Bevel top rim edges
+        bmesh.ops.bevel(
+            bm,
+            geom=top_rim_edges,
+            offset=bevel_top_rim,
+            segments=2,
+            profile=0.5,
+            affect='EDGES'
+        )
+        
+        # Bevel vertical edges
+        bmesh.ops.bevel(
+            bm,
+            geom=vertical_edges,
+            offset=bevel_vertical,
+            segments=8,
+            profile=0.5,
+            affect='EDGES'
+        )
+        
+        bmesh.ops.bevel(
+            bm,
+            geom=inner_vertical_edges,
+            offset=1.5,
+            segments=8,
+            profile=0.5,
+            affect='EDGES'
+        )
 
         # Write bmesh to mesh
         bm.to_mesh(mesh)
         bm.free()
 
-        # Create vertex group for top bevel
-        obj.vertex_groups.new(name="Bevel_Top")
-        obj.vertex_groups["Bevel_Top"].add(top_rim_verts, 1.0, "REPLACE")
-
-        # Create vertex group for vertical bevels
-        obj.vertex_groups.new(name="Bevel_Vertical")
-        obj.vertex_groups["Bevel_Vertical"].add(vert_verts, 1.0, "REPLACE")
 
         KeycapGenerator.add_bevel_modifiers(obj)
-
-        # Set object as active
-        bpy.context.view_layer.objects.active = obj
-        obj.select_set(True)
-
+        
         # Add stem using boolean modifier (after mesh is created)
         if stem_type == "CHERRY_MX":
             KeycapGenerator._add_cherry_stem(obj, keycap_height)
-
-        # Add smooth shading with auto-smooth
-        bpy.context.view_layer.objects.active = obj
-        obj.select_set(True)
+        
+        # Add smooth shading (need object mode)
+        bpy.ops.object.mode_set(mode='OBJECT')
         bpy.ops.object.shade_smooth()
+        
 
         return obj
 
@@ -316,13 +326,15 @@ class KeycapGenerator:
         bpy.context.view_layer.objects.active = keycap_obj
 
         # Add an edge split modifier
-        edge_split_mod = keycap_obj.modifiers.new(
-            name="Edge_Split_Mod", type="EDGE_SPLIT"
-        )
-        edge_split_mod.split_angle = radians(30.0)
 
-        # Apply edge split
-        bpy.ops.object.modifier_apply(modifier="Edge_Split_Mod")
+
+#        edge_split_mod = keycap_obj.modifiers.new(
+#            name="Edge_Split_Mod", type="EDGE_SPLIT"
+#        )
+#        edge_split_mod.split_angle = radians(30.0)
+
+#        # Apply edge split
+#        bpy.ops.object.modifier_apply(modifier="Edge_Split_Mod")
 
 
 # Operator to generate keycap
@@ -421,7 +433,7 @@ class KeycapProperties(bpy.types.PropertyGroup):
     bevel_vertical: bpy.props.FloatProperty(
         name="Vertical Corner Bevel",
         description="Bevel radius for vertical corner edges (mm)",
-        default=0.5,
+        default=1.5,
         min=0.0,
         max=2.0,
         step=10,
