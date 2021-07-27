@@ -160,10 +160,6 @@ class KeycapGenerator:
         # Top face (outer)
         top_face = bm.faces.new(top_outer)
 
-        # Track top rim edges
-        for edge in top_face.edges:
-            top_rim_edges.append(edge)
-
         # Outer side faces
         for i in range(4):
             next_i = (i + 1) % 4
@@ -208,16 +204,13 @@ class KeycapGenerator:
                 [base_outer[i], base_inner[i], base_inner[next_i], base_outer[next_i]]
             )
 
-        # Bevel top rim edges
-        bmesh.ops.bevel(
-            bm,
-            geom=top_rim_edges,
-            offset=bevel_top_rim,
-            segments=2,
-            profile=0.5,
-            affect='EDGES'
-        )
-        
+        # Track top rim edges
+        #        for edge in bm.edges:
+        #            v1, v2 = edge.verts
+        #            # Both vertices at top height = top rim edge
+        #            if abs(v1.co.z - keycap_height) < 0.001 and abs(v2.co.z - keycap_height) < 0.001:
+        #                top_rim_edges.append(edge)
+
         # Bevel vertical edges
         bmesh.ops.bevel(
             bm,
@@ -225,33 +218,66 @@ class KeycapGenerator:
             offset=bevel_vertical,
             segments=8,
             profile=0.5,
-            affect='EDGES'
+            affect="EDGES",
         )
-        
+
+        # Bevel inner verticals
         bmesh.ops.bevel(
             bm,
             geom=inner_vertical_edges,
             offset=1.5,
             segments=8,
             profile=0.5,
-            affect='EDGES'
+            affect="EDGES",
+        )
+
+        bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        bm.normal_update()
+
+        # Track top rim edges
+        top_faces = [
+            f
+            for f in bm.faces
+            if abs(sum(v.co.z for v in f.verts) / len(f.verts) - keycap_height) < 0.001
+            and abs(f.normal.z) > 0.9
+        ]
+        
+        rim_edges = []
+        
+        if top_faces:
+            top_face = top_faces[0]
+            # any edge of the top face that is shared with a non-horizontal face -> rim
+            for e in top_face.edges:
+                for lf in e.link_faces:
+                    if lf is top_face:
+                        continue
+                    if abs(lf.normal.z) < 0.99:  # linked face isn't horizontal
+                        rim_edges.append(e)
+                        break
+        
+        # Bevel top edges
+        bmesh.ops.bevel(
+            bm,
+            geom=rim_edges,
+            offset=0.5,
+            segments=5,
+            profile=0.5,
+            affect="EDGES",
         )
 
         # Write bmesh to mesh
         bm.to_mesh(mesh)
         bm.free()
 
+        # KeycapGenerator.add_bevel_modifiers(obj)
 
-        KeycapGenerator.add_bevel_modifiers(obj)
-        
         # Add stem using boolean modifier (after mesh is created)
         if stem_type == "CHERRY_MX":
             KeycapGenerator._add_cherry_stem(obj, keycap_height)
-        
+
         # Add smooth shading (need object mode)
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
         bpy.ops.object.shade_smooth()
-        
 
         return obj
 
@@ -326,15 +352,13 @@ class KeycapGenerator:
         bpy.context.view_layer.objects.active = keycap_obj
 
         # Add an edge split modifier
+        edge_split_mod = keycap_obj.modifiers.new(
+            name="Edge_Split_Mod", type="EDGE_SPLIT"
+        )
+        edge_split_mod.split_angle = radians(30.0)
 
-
-#        edge_split_mod = keycap_obj.modifiers.new(
-#            name="Edge_Split_Mod", type="EDGE_SPLIT"
-#        )
-#        edge_split_mod.split_angle = radians(30.0)
-
-#        # Apply edge split
-#        bpy.ops.object.modifier_apply(modifier="Edge_Split_Mod")
+        # Apply edge split
+        bpy.ops.object.modifier_apply(modifier="Edge_Split_Mod")
 
 
 # Operator to generate keycap
