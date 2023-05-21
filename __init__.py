@@ -25,20 +25,12 @@ class KeycapGenerator:
     """Generates keycap geometry with parametric controls"""
 
     def add_bevel_modifiers(obj):
-        for name in ["Bevel_Top_Mod", "Bevel_Vert_Mod", "Bevel_Dish_Mod"]:
+        for name in ["Bevel_Vert_Mod", "Bevel_Dish_Mod"]:
             if obj.modifiers.get(name):
                 continue  # don't recreate if already exists
 
-        top_mod = obj.modifiers.new("Bevel_Top_Mod", "BEVEL")
-        top_mod.limit_method = "VGROUP"
-        top_mod.vertex_group = "Bevel_Top_Rim"
-        top_mod.segments = 3
-        top_mod.use_clamp_overlap = True
-        top_mod.width = bpy.context.scene.keycap_props.bevel_top_rim
-
         vert_mod = obj.modifiers.new("Bevel_Vert_Mod", "BEVEL")
-        vert_mod.limit_method = "VGROUP"
-        vert_mod.vertex_group = "Bevel_Vertical"
+        vert_mod.limit_method = "WEIGHT"
         vert_mod.segments = 8
         vert_mod.use_clamp_overlap = True
         vert_mod.width = bpy.context.scene.keycap_props.bevel_vertical
@@ -55,7 +47,6 @@ class KeycapGenerator:
         width=1.0,
         profile_type="CHERRY",
         profile_row=3,
-        bevel_top_rim=0.3,
         bevel_vertical=1.5,
         stem_type="CHERRY_MX",
     ):
@@ -167,14 +158,24 @@ class KeycapGenerator:
                 [base_outer[i], base_outer[next_i], top_outer[next_i], top_outer[i]]
             )
 
-            # Track vertical edges (corners)
-            for edge in face.edges:
+        # Track only the 4 corner edges (not all vertical edges)
+        bevel_weight_layer = bm.edges.layers.float.get("bevel_weight_edge")
+        if bevel_weight_layer is None:
+            bevel_weight_layer = bm.edges.layers.float.new("bevel_weight_edge")
+
+        corner_edges = []
+
+        for i in range(4):
+            # Each corner has exactly one vertical edge connecting base_outer[i] to top_outer[i]
+            for edge in base_outer[i].link_edges:
                 v1, v2 = edge.verts
-                # Check if the edge connects top to bottom
-                if abs(v1.co.z - v2.co.z) > 0.001:
-                    if edge not in vertical_edges:
-                        vertical_edges.append(edge)
-                        edge.select = True
+                if (v1 == base_outer[i] and v2 == top_outer[i]) or (
+                    v2 == base_outer[i] and v1 == top_outer[i]
+                ):
+                    edge.select = True
+                    corner_edges.append(edge)
+                    edge[bevel_weight_layer] = 1.0
+                    break
 
         # Create faces - Inner shell
         # Top face (inner) - reversed to face inward
@@ -204,34 +205,7 @@ class KeycapGenerator:
                 [base_outer[i], base_inner[i], base_inner[next_i], base_outer[next_i]]
             )
 
-        # Track top rim edges
-        #        for edge in bm.edges:
-        #            v1, v2 = edge.verts
-        #            # Both vertices at top height = top rim edge
-        #            if abs(v1.co.z - keycap_height) < 0.001 and abs(v2.co.z - keycap_height) < 0.001:
-        #                top_rim_edges.append(edge)
-
-        # Bevel vertical edges
-        bmesh.ops.bevel(
-            bm,
-            geom=vertical_edges,
-            offset=bevel_vertical,
-            segments=8,
-            profile=0.5,
-            affect="EDGES",
-        )
-
-        # Bevel inner verticals
-        bmesh.ops.bevel(
-            bm,
-            geom=inner_vertical_edges,
-            offset=1.5,
-            segments=8,
-            profile=0.5,
-            affect="EDGES",
-        )
-
-        bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        # bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
         bm.normal_update()
 
         # Track top rim edges
@@ -241,9 +215,9 @@ class KeycapGenerator:
             if abs(sum(v.co.z for v in f.verts) / len(f.verts) - keycap_height) < 0.001
             and abs(f.normal.z) > 0.9
         ]
-        
+
         rim_edges = []
-        
+
         if top_faces:
             top_face = top_faces[0]
             # any edge of the top face that is shared with a non-horizontal face -> rim
@@ -253,31 +227,25 @@ class KeycapGenerator:
                         continue
                     if abs(lf.normal.z) < 0.99:  # linked face isn't horizontal
                         rim_edges.append(e)
+                        e[bevel_weight_layer] = 0.5
                         break
-        
-        # Bevel top edges
-        bmesh.ops.bevel(
-            bm,
-            geom=rim_edges,
-            offset=0.5,
-            segments=5,
-            profile=0.5,
-            affect="EDGES",
-        )
+
+        # Create deform layer for vertex groups
+        deform_layer = bm.verts.layers.deform.verify()
 
         # Write bmesh to mesh
         bm.to_mesh(mesh)
         bm.free()
 
-        # KeycapGenerator.add_bevel_modifiers(obj)
+        KeycapGenerator.add_bevel_modifiers(obj)
 
         # Add stem using boolean modifier (after mesh is created)
         if stem_type == "CHERRY_MX":
             KeycapGenerator._add_cherry_stem(obj, keycap_height)
 
         # Add smooth shading (need object mode)
-        bpy.ops.object.mode_set(mode="OBJECT")
-        bpy.ops.object.shade_smooth()
+        # bpy.ops.object.mode_set(mode="OBJECT")
+        # bpy.ops.object.shade_smooth()
 
         return obj
 
@@ -351,14 +319,14 @@ class KeycapGenerator:
         keycap_obj.select_set(True)
         bpy.context.view_layer.objects.active = keycap_obj
 
-        # Add an edge split modifier
-        edge_split_mod = keycap_obj.modifiers.new(
-            name="Edge_Split_Mod", type="EDGE_SPLIT"
-        )
-        edge_split_mod.split_angle = radians(30.0)
+        # # Add an edge split modifier
+        # edge_split_mod = keycap_obj.modifiers.new(
+        #     name="Edge_Split_Mod", type="EDGE_SPLIT"
+        # )
+        # edge_split_mod.split_angle = radians(30.0)
 
-        # Apply edge split
-        bpy.ops.object.modifier_apply(modifier="Edge_Split_Mod")
+        # # Apply edge split
+        # bpy.ops.object.modifier_apply(modifier="Edge_Split_Mod")
 
 
 # Operator to generate keycap
@@ -376,7 +344,6 @@ class KEYCAP_OT_generate(bpy.types.Operator):
             width=float(props.width),
             profile_type=props.profile_type,
             profile_row=int(props.profile_row),
-            bevel_top_rim=props.bevel_top_rim,
             bevel_vertical=props.bevel_vertical,
             stem_type=props.stem_type,
         )
@@ -394,9 +361,7 @@ def update_bevels(self, context):
 
     for mod in obj.modifiers:
         if mod.type == "BEVEL":
-            if mod.name == "Bevel_Top_Mod":
-                mod.width = props.bevel_top_rim
-            elif mod.name == "Bevel_Vert_Mod":
+            if mod.name == "Bevel_Vert_Mod":
                 mod.width = props.bevel_vertical
 
 
@@ -444,19 +409,9 @@ class KeycapProperties(bpy.types.PropertyGroup):
         default="3",
     )
 
-    bevel_top_rim: bpy.props.FloatProperty(
-        name="Top Rim Bevel",
-        description="Bevel radius for top rim edges (mm)",
-        default=0.3,
-        min=0.0,
-        max=2.0,
-        step=10,
-        update=update_bevels,
-    )
-
     bevel_vertical: bpy.props.FloatProperty(
-        name="Vertical Corner Bevel",
-        description="Bevel radius for vertical corner edges (mm)",
+        name="Corner Bevels",
+        description="Bevel radius for top and vertical edges (mm)",
         default=1.5,
         min=0.0,
         max=2.0,
@@ -489,9 +444,6 @@ class KEYCAP_PT_main(bpy.types.Panel):
         layout = self.layout
         props = context.scene.keycap_props
 
-        # Title
-        #        layout.label(text="Phase 1 - Core Functionality", icon="MESH_CUBE")
-
         # Parameters
         box = layout.box()
         box.label(text="Parameters:", icon="PREFERENCES")
@@ -512,7 +464,7 @@ class KEYCAP_PT_main(bpy.types.Panel):
         # Bevel settings
         bevel_box = layout.box()
         bevel_box.label(text="Bevels:", icon="MOD_BEVEL")
-        bevel_box.prop(props, "bevel_top_rim")
+        # bevel_box.prop(props, "bevel_top_rim")
         bevel_box.prop(props, "bevel_vertical")
 
         # Generate button
