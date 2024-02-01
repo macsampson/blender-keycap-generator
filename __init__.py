@@ -352,6 +352,24 @@ class KEYCAP_OT_generate(bpy.types.Operator):
         return {"FINISHED"}
 
 
+def update_keycap(self, context):
+    # Find existing keycap
+    keycap = bpy.data.objects.get("Keycap")
+    if keycap:
+        # Store other properties
+        props = context.scene.keycap_props
+        # Delete old keycap
+        bpy.data.objects.remove(keycap, do_unlink=True)
+        # Generate new one
+        KeycapGenerator.create_keycap(
+            width=float(props.width),
+            profile_type=props.profile_type,
+            profile_row=int(props.profile_row),
+            bevel_vertical=props.bevel_vertical,
+            stem_type=props.stem_type,
+        )
+
+
 def update_bevels(self, context):
     obj = context.active_object
     if obj is None:
@@ -377,6 +395,7 @@ class KeycapProperties(bpy.types.PropertyGroup):
             ("SA", "SA", "SA profile (tall, spherical top)"),
         ],
         default="CHERRY",
+        update=update_keycap,
     )
 
     width: bpy.props.EnumProperty(
@@ -395,6 +414,7 @@ class KeycapProperties(bpy.types.PropertyGroup):
             ("7", "7U - Spacebar", "Spacebar on some custom layouts"),
         ],
         default="1",
+        update=update_keycap,
     )
 
     profile_row: bpy.props.EnumProperty(
@@ -407,6 +427,7 @@ class KeycapProperties(bpy.types.PropertyGroup):
             ("4", "R4 (Bottom)", "Bottom row profile"),
         ],
         default="3",
+        update=update_keycap,
     )
 
     bevel_vertical: bpy.props.FloatProperty(
@@ -427,6 +448,7 @@ class KeycapProperties(bpy.types.PropertyGroup):
             #            ("TOPRE", "Topre", "Topre compatible stem (WIP)"),
         ],
         default="CHERRY_MX",
+        update=update_keycap,
     )
 
 
