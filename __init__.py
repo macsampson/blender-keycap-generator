@@ -237,6 +237,103 @@ class KeycapGenerator:
         bm.to_mesh(mesh)
         bm.free()
 
+        # # Apply loop cuts and proportional editing for dish effect
+        # # Must happen before modifiers are added
+        # bpy.context.view_layer.objects.active = obj
+        # obj.select_set(True)
+        # bpy.ops.object.mode_set(mode="EDIT")
+
+        # # Get the bmesh in edit mode
+        # bm_edit = bmesh.from_edit_mesh(mesh)
+        # bm_edit.edges.ensure_lookup_table()
+
+        # # Find an edge that runs along X-axis (perpendicular to Y)
+        # # This will be cut by planes parallel to Y-axis
+        # target_edge_index = 0
+        # for i, edge in enumerate(bm_edit.edges):
+        #     v1, v2 = edge.verts
+        #     # Check if edge runs primarily along X-axis (Y and Z components should be similar)
+        #     if (
+        #         abs(v1.co.y - v2.co.y) < 0.1  # Small Y difference
+        #         and abs(v1.co.z - v2.co.z) < 0.1  # Small Z difference
+        #         and abs(v1.co.x - v2.co.x) > 1.0
+        #     ):  # Significant X difference
+        #         target_edge_index = i
+        #         break
+
+        # # Deselect all first
+        # bpy.ops.mesh.select_all(action="DESELECT")
+
+        # bpy.ops.mesh.loopcut_slide(
+        #     MESH_OT_loopcut={
+        #         "number_cuts": 5,
+        #         "smoothness": 0,
+        #         "falloff": "INVERSE_SQUARE",
+        #         "object_index": 0,
+        #         "edge_index": target_edge_index,
+        #         "mesh_select_mode_init": (True, False, False),
+        #     },
+        #     TRANSFORM_OT_edge_slide={
+        #         "value": 0,
+        #         "single_side": False,
+        #         "use_even": False,
+        #         "flipped": False,
+        #         "use_clamp": True,
+        #         "mirror": True,
+        #         "snap": False,
+        #         "snap_elements": {"INCREMENT"},
+        #         "use_snap_project": False,
+        #         "snap_target": "CLOSEST",
+        #         "use_snap_self": True,
+        #         "use_snap_edit": True,
+        #         "use_snap_nonedit": True,
+        #         "use_snap_selectable": False,
+        #         "snap_point": (0, 0, 0),
+        #         "correct_uv": True,
+        #         "release_confirm": True,
+        #         "use_accurate": False,
+        #     },
+        # )
+
+        # # Switch to vertex select mode
+        # bpy.ops.mesh.select_mode(type="VERT")
+        # bpy.ops.mesh.select_all(action="DESELECT")
+
+        # # Select the middle loop (3rd loop cut)
+        # # Get the mesh in edit mode
+        # bm_edit = bmesh.from_edit_mesh(mesh)
+
+        # # Find vertices at approximately the middle Y position (where 3rd loop should be)
+        # all_verts = [v for v in bm_edit.verts]
+        # if all_verts:
+        #     # Calculate the center Y of the keycap
+        #     y_positions = sorted(set(v.co.y for v in all_verts))
+        #     if len(y_positions) >= 3:
+        #         # Select vertices at the middle Y position
+        #         target_y = y_positions[len(y_positions) // 2]
+        #         tolerance = 0.1
+
+        #         for v in bm_edit.verts:
+        #             if abs(v.co.y - target_y) < tolerance:
+        #                 v.select = True
+
+        #         bmesh.update_edit_mesh(mesh)
+
+        # # Apply proportional transform along Z axis
+        # bpy.ops.transform.translate(
+        #     value=(0, 0, -0.5),  # Move down 0.5mm
+        #     orient_type="GLOBAL",
+        #     orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+        #     orient_matrix_type="GLOBAL",
+        #     constraint_axis=(False, False, True),  # Z axis only
+        #     use_proportional_edit=True,
+        #     proportional_edit_falloff="SPHERE",
+        #     proportional_size=8.0,  # Falloff radius
+        # )
+
+        # # Return to object mode
+        # bpy.ops.object.mode_set(mode="OBJECT")
+
         KeycapGenerator.add_bevel_modifiers(obj)
 
         # Add stem using boolean modifier (after mesh is created)
@@ -352,11 +449,45 @@ class KEYCAP_OT_generate(bpy.types.Operator):
         return {"FINISHED"}
 
 
+# Operator to bake keycap (apply all modifiers)
+class KEYCAP_OT_bake(bpy.types.Operator):
+    """Apply all modifiers to the selected keycap"""
+
+    bl_idname = "keycap.bake"
+    bl_label = "Bake Keycap"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        obj = context.active_object
+
+        if not obj:
+            self.report({"ERROR"}, "No object selected")
+            return {"CANCELLED"}
+
+        if not obj.modifiers:
+            self.report({"WARNING"}, "No modifiers to apply")
+            return {"CANCELLED"}
+
+        # Apply all modifiers
+        modifier_count = len(obj.modifiers)
+        bpy.context.view_layer.objects.active = obj
+
+        for mod in list(obj.modifiers):
+            try:
+                bpy.ops.object.modifier_apply(modifier=mod.name)
+            except Exception as e:
+                self.report({"ERROR"}, f"Failed to apply modifier {mod.name}: {str(e)}")
+                return {"CANCELLED"}
+
+        self.report({"INFO"}, f"Applied {modifier_count} modifier(s)")
+        return {"FINISHED"}
+
+
 def update_keycap(self, context):
     # Find existing keycap
     keycap = bpy.data.objects.get("Keycap")
     if keycap:
-        # Store other properties
+        # Store other props
         props = context.scene.keycap_props
         # Delete old keycap
         bpy.data.objects.remove(keycap, do_unlink=True)
@@ -445,11 +576,21 @@ class KeycapProperties(bpy.types.PropertyGroup):
         description="Switch stem type",
         items=[
             ("CHERRY_MX", "Cherry MX", "Cherry MX compatible stem"),
-            #            ("TOPRE", "Topre", "Topre compatible stem (WIP)"),
+            ("None", "None", "No stem"),
         ],
         default="CHERRY_MX",
         update=update_keycap,
     )
+
+    # top_curve: bpy.props.FloatProperty(
+    #     name="Top Curve",
+    #     description="Curvature amount for the top surface (dish effect)",
+    #     default=0.5,
+    #     min=0.0,
+    #     max=2.0,
+    #     step=10,
+    #     update=update_bevels,
+    # )
 
 
 # UI Panel
@@ -489,15 +630,27 @@ class KEYCAP_PT_main(bpy.types.Panel):
         # bevel_box.prop(props, "bevel_top_rim")
         bevel_box.prop(props, "bevel_vertical")
 
+        # Top Curve settings
+        # curve_box = layout.box()
+        # curve_box.label(text="Top Curve:", icon="SPHERECURVE")
+        # # curve_box.prop(props, "bevel_top_rim")
+        # curve_box.prop(props, "top_curve")
+
         # Generate button
         layout.separator()
         layout.operator("keycap.generate", text="Generate Keycap", icon="EVENT_F1")
+
+        # Bake button
+        layout.operator(
+            "keycap.bake", text="Bake Keycap (Apply Mods)", icon="RENDER_RESULT"
+        )
 
 
 # Registration
 classes = (
     KeycapProperties,
     KEYCAP_OT_generate,
+    KEYCAP_OT_bake,
     KEYCAP_PT_main,
 )
 
