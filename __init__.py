@@ -18,6 +18,8 @@ import bmesh
 from mathutils import Vector
 from math import radians
 import math
+import os
+import subprocess
 
 
 # Keycap geometry generator
@@ -33,6 +35,7 @@ class KeycapGenerator:
         vert_mod.limit_method = "WEIGHT"
         vert_mod.segments = 8
         vert_mod.use_clamp_overlap = True
+        vert_mod.profile = 0.64
         vert_mod.width = bpy.context.scene.keycap_props.bevel_vertical
 
     #        dish_mod = obj.modifiers.new("Bevel_Dish_Mod", 'BEVEL')
@@ -195,6 +198,7 @@ class KeycapGenerator:
                 if abs(v1.co.z - v2.co.z) > 0.001:
                     if edge not in inner_vertical_edges:
                         inner_vertical_edges.append(edge)
+                        # edge[bevel_weight_layer] = 0.2
                         edge.select = True
 
         # Connect bottom edges (rim where outer meets inner)
@@ -483,6 +487,45 @@ class KEYCAP_OT_bake(bpy.types.Operator):
         return {"FINISHED"}
 
 
+class KEYCAP_OT_export(bpy.types.Operator):
+    bl_idname = "keycap.export"
+    bl_label = "Export Keycap"
+    bl_description = "Export the selected keycap using current export settings"
+
+    def execute(self, context):
+        obj = context.active_object
+        ex = context.scene.export_settings
+
+        if obj is None:
+            self.report({"WARNING"}, "No active object to export")
+            return {"CANCELLED"}
+
+        export_dir = bpy.path.abspath(ex.export_path)
+        os.makedirs(export_dir, exist_ok=True)
+
+        filename = f"{obj.name}.{ex.file_format.lower()}"
+        export_path = os.path.join(export_dir, filename)
+
+        if ex.file_format == "STL":
+            bpy.ops.wm.stl_export(filepath=export_path, check_existing=True)
+        elif ex.file_format == "OBJ":
+            bpy.ops.export_scene.obj(filepath=export_path, use_selection=True)
+        elif ex.file_format == "GLB":
+            bpy.ops.export_scene.gltf(
+                filepath=export_path, export_format="GLB", use_selection=True
+            )
+
+        self.report({"INFO"}, f"Exported {obj.name} as {ex.file_format}")
+
+        if ex.open_in_slicer and ex.slicer_path:
+            try:
+                subprocess.Popen([ex.slicer_path, export_path])
+            except Exception as e:
+                self.report({"ERROR"}, f"Failed to open slicer: {e}")
+
+        return {"FINISHED"}
+
+
 def update_keycap(self, context):
     # Find existing keycap
     keycap = bpy.data.objects.get("Keycap")
@@ -593,6 +636,36 @@ class KeycapProperties(bpy.types.PropertyGroup):
     # )
 
 
+class KeycapExportProperties(bpy.types.PropertyGroup):
+    export_path: bpy.props.StringProperty(
+        name="Export Path",
+        description="Where to save exported files",
+        subtype="DIR_PATH",
+        default="//exports/",
+    )
+    file_format: bpy.props.EnumProperty(
+        name="File Format",
+        description="Choose export format",
+        items=[
+            ("STL", "STL", "Export as STL"),
+            ("OBJ", "OBJ", "Export as OBJ"),
+            ("GLB", "GLB", "Export as GLB"),
+        ],
+        default="STL",
+    )
+    open_in_slicer: bpy.props.BoolProperty(
+        name="Open in slicer after export",
+        description="Automatically open exported file in your slicer",
+        default=False,
+    )
+    slicer_path: bpy.props.StringProperty(
+        name="Slicer Executable",
+        description="Path to your slicer executable",
+        subtype="FILE_PATH",
+        default="",
+    )
+
+
 # UI Panel
 class KEYCAP_PT_main(bpy.types.Panel):
     """Main panel for keycap generation"""
@@ -638,19 +711,34 @@ class KEYCAP_PT_main(bpy.types.Panel):
 
         # Generate button
         layout.separator()
-        layout.operator("keycap.generate", text="Generate Keycap", icon="EVENT_F1")
-
+        gen_box = layout.box()
+        gen_box.operator("keycap.generate", text="Generate Keycap", icon="EVENT_F1")
         # Bake button
-        layout.operator(
+        gen_box.operator(
             "keycap.bake", text="Bake Keycap (Apply Mods)", icon="RENDER_RESULT"
         )
+
+        ex = context.scene.export_settings
+
+        # Export Settings
+        layout.separator()
+        export_box = layout.box()
+        export_box.label(text="Export Settings:", icon="EXPORT")
+        export_box.prop(ex, "export_path")
+        export_box.prop(ex, "file_format")
+        export_box.prop(ex, "open_in_slicer")
+        if ex.open_in_slicer:
+            export_box.prop(ex, "slicer_path")
+        export_box.operator("keycap.export", icon="EXPORT")
 
 
 # Registration
 classes = (
     KeycapProperties,
+    KeycapExportProperties,
     KEYCAP_OT_generate,
     KEYCAP_OT_bake,
+    KEYCAP_OT_export,
     KEYCAP_PT_main,
 )
 
@@ -659,12 +747,16 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Scene.keycap_props = bpy.props.PointerProperty(type=KeycapProperties)
+    bpy.types.Scene.export_settings = bpy.props.PointerProperty(
+        type=KeycapExportProperties
+    )
 
 
 def unregister():
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
     del bpy.types.Scene.keycap_props
+    del bpy.types.Scene.export_settings
 
 
 if __name__ == "__main__":
