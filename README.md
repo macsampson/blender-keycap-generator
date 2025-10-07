@@ -6,10 +6,10 @@ A Blender addon for generating parametric mechanical keyboard keycaps.
 
 ## Installation
 
-1. Download or clone this repository
+1. Download a zip this repo
 2. Open Blender (3.0+)
 3. Go to `Edit > Preferences > Add-ons`
-4. Click `Install...` and select `__init__.py`
+4. Click `Install...` and select the zip folder
 5. Enable the addon by checking the box next to "Procedural Keycap Generator"
 
 ## Usage
