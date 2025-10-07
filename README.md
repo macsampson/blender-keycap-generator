@@ -2,6 +2,8 @@
 
 A Blender addon for generating parametric mechanical keyboard keycaps.
 
+![](https://github.com/macsampson/blender_keycap_generator/example.png)
+
 ## Installation
 
 1. Download or clone this repository
