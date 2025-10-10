@@ -16,6 +16,16 @@ class KEYCAP_OT_generate(bpy.types.Operator):
     bl_options = {"REGISTER", "UNDO"}
 
     def execute(self, context):
+        # Set unit system to metric with millimeter scale
+        context.scene.unit_settings.system = "METRIC"
+        context.scene.unit_settings.scale_length = 0.001  # 1 BU = 1mm
+        context.scene.unit_settings.length_unit = "MILLIMETERS"
+
+        for area in bpy.context.screen.areas:
+            if area.type == "VIEW_3D":
+                space = area.spaces.active
+                space.overlay.grid_scale = 0.001  # Each grid square = 1 mm
+
         props = context.scene.keycap_props
 
         KeycapGenerator.create_keycap(
@@ -91,7 +101,7 @@ class KEYCAP_OT_export(bpy.types.Operator):
         # elif ex.file_format == "GLB":
         #     bpy.ops.export_scene.gltf(
         #         filepath=export_path, export_format="GLB", use_selection=True
-            )
+        # )
 
         self.report({"INFO"}, f"Exported {obj.name} as {ex.file_format}")
 

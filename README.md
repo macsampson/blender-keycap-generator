@@ -40,6 +40,8 @@ A Blender addon for generating parametric mechanical keyboard keycaps.
 
 ## TODO
 
-- Top curve real time modification
-- Stem support generation
-- Support for multiple styles of stems (not to be confused with above)
+- stem support generation
+- support for multiple styles of stems (not to be confused with above)
+- custom width override
+- top curve real time modification
+- inner bevel
