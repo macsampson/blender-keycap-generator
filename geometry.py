@@ -248,13 +248,13 @@ class KeycapGenerator:
         bool_mod_v = stem_cylinder.modifiers.new(name="Boolean_V", type="BOOLEAN")
         bool_mod_v.operation = "DIFFERENCE"
         bool_mod_v.object = v_cross
-        bool_mod_v.solver = "FAST"
+        bool_mod_v.solver = "FLOAT"
 
         # Apply boolean difference to cut horizontal cross from cylinder
         bool_mod_h = stem_cylinder.modifiers.new(name="Boolean_H", type="BOOLEAN")
         bool_mod_h.operation = "DIFFERENCE"
         bool_mod_h.object = h_cross
-        bool_mod_h.solver = "FAST"
+        bool_mod_h.solver = "FLOAT"
 
         # Apply boolean modifiers
         bpy.context.view_layer.objects.active = stem_cylinder
@@ -269,7 +269,7 @@ class KeycapGenerator:
         union_mod = keycap_obj.modifiers.new(name="Boolean_Stem_Union", type="BOOLEAN")
         union_mod.operation = "UNION"
         union_mod.object = stem_cylinder
-        union_mod.solver = "FAST"
+        union_mod.solver = "FLOAT"
 
         # Apply the union modifier to merge stem into keycap
         bpy.context.view_layer.objects.active = keycap_obj
