@@ -45,3 +45,7 @@ A Blender addon for generating parametric mechanical keyboard keycaps.
 - custom width override
 - top curve real time modification
 - inner bevel
+
+## License
+
+This project is licensed under the [GNU General Public License v3.0](LICENSE) or later.
